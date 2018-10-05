@@ -256,8 +256,8 @@ end
 
 -- Remove #0000 if it's present and transform to lowercase
 local function normalizePlayerName(playerName)
-    if playerName:find("#0000") then
-        playerName = playerName:sub(1, -6)
+    if playerName:sub(-5, -5) ~= "#" then
+        playerName = playerName .. "#0000"
     end
 
     return playerName:lower()
@@ -488,6 +488,8 @@ Player = function(playerName)
         tfm.exec.changePlayerSize(player.name, 5.0)
 
         local playerObject = tfm.get.room.playerList[player.name]
+
+        if not playerObject then return end
 
         ui.addTextArea(UI_ID.THICC + playerObject.id,
             TEXT.THICC,
@@ -872,8 +874,10 @@ function eventNewPlayer(playerName)
 
     local playerTribeName = tfm.get.room.playerList[playerName].tribeName
     local roomName = tfm.get.room.name:lower()
+    local normalizedName = normalizePlayerName(playerName)
 
-    if roomName:find(normalizePlayerName(playerName)) or
+    if roomName:find(normalizedName) or
+            roomName:find(normalizedName:sub(1, -6)) or
             (playerTribeName and roomName:find(playerTribeName:lower())) then
         player.isRoomOwner = true
         player.isRoomAdmin = true
