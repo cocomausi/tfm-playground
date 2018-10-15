@@ -81,6 +81,21 @@ local SHAMAN_OBJECT = {
     TINYPLANK = 60,
 }
 
+local TFM_COLOR = {
+    BLUE = "BV",
+    RED = "R",
+    PERIWINKLE = "BL",
+    YELLOW = "J",
+    WHITE = "N",
+    DARK_PERWINKLE = "G",
+    DARK_CYAN = "V",
+    GREEN = "VP",
+    PURPLE = "VI",
+    PINK = "ROSE",
+    CYAN = "CH",
+    LIGHT_GREEN = "T",
+}
+
 -- Helper functions ------------------------------------------------------------
 
 -- Split string by the given delimiter or by whitespace
@@ -177,6 +192,8 @@ function Player:new(playerName)
         keyDown = {
             control = false,
         },
+        guiVisible = false,
+        guiLastOpened = nil,
     }
 
     setmetatable(player, self)
@@ -195,9 +212,237 @@ function Player:resetForRespawn()
     self.angryCount = 0
 end
 
+local gui = {
+    bgColor = 0x000000,
+    borderColor = 0x010101,
+    bgAlpha = 0.85,
+
+    -- Transformice GUI info
+    tfmInfoBarHeight = 22,
+    tfmMaxWidth = 800,
+    tfmMaxHeight = 400,
+
+    -- Module GUI settings
+    guiWidth = 740,
+    guiHeight = 338,
+    guiButtonHeight = 17,
+    guiMargin = 17,
+    guiMaxButtonsInRow = 5,
+    guiLinkColor = TFM_COLOR.YELLOW,
+
+    -- GUI element settings determined at runtime
+    mainWindowWidth = nil,
+    mainWindowHeight = nil,
+    mainWindowX = nil,
+    mainWindowY = nil,
+    buttonRows = nil,
+    buttonWidth = nil,
+    buttonHeight = nil,
+    buttonStartX = nil,
+    buttonStartY = nil,
+
+    id = {
+        mainWindow = 1000,
+        buttonGroup = 2000,
+    },
+
+    buttons = {
+        -- Row 1
+        {
+            isDummy = false,
+            action = "showAbout",
+            title = "About",
+        },
+        {
+            isDummy = false,
+            action = "showGeneralCommands",
+            title = "General Commands",
+        },
+        {
+            isDummy = false,
+            action = "showFunCommands",
+            title = "Fun Commands",
+        },
+        {
+            isDummy = true,
+        },
+        {
+            isDummy = true,
+        },
+
+        -- Row 2
+        {
+            isDummy = false,
+            action = "showAdminCommands",
+            title = "Admin Commands",
+        },
+        {
+            isDummy = false,
+            action = "showSpawning",
+            title = "Spawning",
+        },
+        {
+            isDummy = false,
+            action = "showRoomSettings",
+            title = "Room Settings",
+        },
+        {
+            isDummy = true,
+        },
+        {
+            isDummy = false,
+            action = "hide",
+            title = "Close",
+            linkColor = TFM_COLOR.RED,
+        },
+    },
+}
+
+function gui:init()
+    self.guiButtonRows = math.ceil(#self.buttons / self.guiMaxButtonsInRow)
+
+    local effectiveMaxHeight = self.tfmMaxHeight - self.tfmInfoBarHeight
+    local buttonAreaHeight =
+        (self.guiButtonRows * self.guiButtonHeight) + -- Combined height of rows
+        (self.guiButtonRows * self.guiMargin) -- Combined height of margins
+
+    self.mainWindowWidth = self.guiWidth
+    self.mainWindowHeight = self.guiHeight - buttonAreaHeight
+    self.mainWindowX = (self.tfmMaxWidth - self.mainWindowWidth) / 2
+    self.mainWindowY =
+        (effectiveMaxHeight - self.guiHeight) / 2 + self.tfmInfoBarHeight
+
+    local buttonGaps = self.guiMaxButtonsInRow - 1
+    local gapsCombinedWidth = buttonGaps * self.guiMargin
+
+    self.buttonStartX = self.mainWindowX
+    self.buttonStartY =
+        self.mainWindowY + self.mainWindowHeight + self.guiMargin
+    self.buttonWidth =
+        (self.guiWidth - gapsCombinedWidth) / gui.guiMaxButtonsInRow
+    self.buttonHeight = self.guiButtonHeight
+end
+
+function gui:draw(playerName, mainWindowText, currentButton)
+    local player = players[playerName]
+    player.guiVisible = true
+    player.guiLastOpened = currentButton
+
+    -- Draw main window
+    ui.addTextArea(
+        self.id.mainWindow,
+        mainWindowText,
+        playerName,
+        self.mainWindowX,
+        self.mainWindowY,
+        self.mainWindowWidth,
+        self.mainWindowHeight,
+        self.bgColor,
+        self.borderColor,
+        self.bgAlpha,
+        true
+    )
+
+    -- Draw buttons
+    for i,button in ipairs(self.buttons) do
+        if not button.isDummy then
+            local linkColor = button.linkColor or self.guiLinkColor
+
+            local x = (i - 1) % self.guiMaxButtonsInRow
+            local y = math.floor((i - 1) / self.guiMaxButtonsInRow)
+
+            local buttonText
+
+            if button.action == currentButton then
+                buttonText =
+                    "<p align='center'><%s><b><u><a href='event:gui-%s'>%s</a></p>"
+            else
+                buttonText =
+                    "<p align='center'><%s><a href='event:gui-%s'>%s</a></p>"
+            end
+
+            ui.addTextArea(
+                self.id.buttonGroup + i,
+                buttonText:format(linkColor, button.action, button.title),
+                playerName,
+                self.buttonStartX + ((self.buttonWidth + self.guiMargin) * x),
+                self.buttonStartY + ((self.buttonHeight + self.guiMargin) * y),
+                self.buttonWidth,
+                self.buttonHeight,
+                button.bgColor or self.bgColor,
+                button.borderColor or self.borderColor,
+                button.bgAlpha or self.bgAlpha,
+                true
+            )
+        end
+    end
+end
+
+function gui:hide(playerName)
+    players[playerName].guiVisible = false
+
+    -- Hide main window
+    ui.removeTextArea(self.id.mainWindow, playerName)
+
+    -- Hide buttons
+    for i in ipairs(self.buttons) do
+        ui.removeTextArea(self.id.buttonGroup + i, playerName)
+    end
+end
+
+function gui:showAbout(playerName)
+    local text = "About this module"
+
+    self:draw(playerName, text, "showAbout")
+end
+
+function gui:showGeneralCommands(playerName)
+    local text = "General commands and their usage"
+
+    self:draw(playerName, text, "showGeneralCommands")
+end
+
+function gui:showFunCommands(playerName)
+    local text = "Fun commands and their usage"
+
+    self:draw(playerName, text, "showFunCommands")
+end
+
+function gui:showAdminCommands(playerName)
+    local text = "Admin-only commands"
+
+    self:draw(playerName, text, "showAdminCommands")
+end
+
+function gui:showSpawning(playerName)
+    local text = "Spawning objects"
+
+    self:draw(playerName, text, "showSpawning")
+end
+
+function gui:showRoomSettings(playerName)
+    local text = "Room settings go here"
+
+    self:draw(playerName, text, "showRoomSettings")
+end
+
+function gui:toggle(playerName)
+    local player = players[playerName]
+
+    if player.guiVisible then
+        self:hide(playerName)
+    else
+        if gui[player.guiLastOpened] then
+            gui[player.guiLastOpened](gui, playerName)
+        else
+            gui:showAbout(playerName)
+        end
+    end
+end
+
 -- Callbacks -------------------------------------------------------------------
 
-function eventChatCommand(_playerName, text)
+function eventChatCommand(playerName, text)
     local args = splitString(text)
     local command = args[1]:lower()
 
@@ -218,6 +463,8 @@ function eventChatCommand(_playerName, text)
         else
             print("Not found")
         end
+    elseif command == "h" or command == "help" then
+        gui:toggle(playerName)
     end
 end
 
@@ -258,6 +505,8 @@ function eventNewPlayer(playerName)
         player.isRoomOwner = true
         player.isRoomAdmin = true
     end
+
+    gui:showAbout(playerName)
 end
 
 function eventKeyboard(playerName, keyCode, down, _playerX, _playerY)
@@ -265,6 +514,8 @@ function eventKeyboard(playerName, keyCode, down, _playerX, _playerY)
 
     if keyCode == KEY_CODE.CONTROL then
         player.keyDown.control = down
+    elseif keyCode == KEY_CODE.H then
+        gui:toggle(playerName)
     end
 end
 
@@ -282,12 +533,19 @@ function eventPlayerRespawn(playerName)
     player:resetForRespawn()
 end
 
-function eventTextAreaCallback(_textAreaId, _playerName, _eventName)
+function eventTextAreaCallback(_textAreaId, playerName, eventName)
+    local parts = splitString(eventName, "-")
+
+    if parts[1] == "gui" then
+        gui[parts[2]](gui, playerName)
+    end
 end
 
 -- Initialization --------------------------------------------------------------
 
 local function init()
+    gui:init()
+
     for playerName in pairs(tfm.get.room.playerList) do
         eventNewPlayer(playerName)
     end
